@@ -1,0 +1,171 @@
+/* Import Tailwind base styles */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Define your brand colors */
+:root {
+    --brand-bg: #111827; /* Dark gray/black */
+    --brand-text: #F3F4F6; /* Light gray */
+    --brand-primary: #F59E0B; /* Amber/Yellowish-Orange */
+    --brand-primary-hover: #D97706; /* Darker Amber */
+    --brand-secondary: #374151; /* Mid Gray */
+}
+
+/* Apply base styles to the body */
+body {
+    background-color: var(--brand-bg);
+    color: var(--brand-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Main app layout */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+@media (min-width: 768px) {
+    .app-container {
+        flex-direction: row;
+    }
+}
+
+/* Control Panel (Left Side) */
+.control-panel {
+    width: 100%;
+    padding: 1.5rem;
+    background-color: var(--brand-bg);
+}
+@media (min-width: 768px) {
+    .control-panel {
+        width: 30%;
+        min-width: 350px;
+        max-width: 450px;
+        overflow-y: auto;
+    }
+}
+
+/* Map Container (Right Side) */
+.map-container {
+    width: 100%;
+    height: 400px; /* Height for mobile */
+    min-height: 400px;
+}
+@media (min-width: 768px) {
+    .map-container {
+        width: 70%;
+        height: 100vh; /* Full viewport height on desktop */
+    }
+}
+
+/* Map must have explicit height */
+#map {
+    height: 100%;
+    width: 100%;
+    background-color: #333; /* Dark background while loading */
+}
+
+/* Custom styles for Leaflet popup (Dark Mode) */
+.leaflet-popup-content-wrapper {
+    background-color: var(--brand-secondary);
+    color: var(--brand-text);
+    border-radius: 0.5rem;
+    border: 1px solid var(--brand-primary);
+}
+.leaflet-popup-content {
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+.leaflet-popup-tip {
+    background-color: var(--brand-secondary);
+}
+.leaflet-popup-close-button {
+    color: var(--brand-text) !important;
+}
+
+/* Simple loading spinner */
+.loader {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid var(--brand-primary);
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto; /* Center it in the button */
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Legend CSS */
+.leaflet-control-container .leaflet-control.leaflet-legend {
+    background-color: rgba(27, 38, 59, 0.9); /* Dark, semi-transparent bg */
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid var(--brand-secondary);
+    color: var(--brand-text);
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+}
+.leaflet-legend h4 {
+    margin: 0 0 5px;
+    font-weight: bold;
+}
+.leaflet-legend .legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 4px;
+}
+.leaflet-legend .legend-color-box {
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    border: 1px solid #555;
+}
+
+/* --- NEW CSS FOR STYLED TOOLTIP --- */
+.tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+.tooltip .tooltip-text {
+    visibility: hidden;
+    width: 280px; /* Wider tooltip */
+    background-color: var(--brand-secondary);
+    color: var(--brand-text);
+    text-align: left;
+    border-radius: 6px;
+    padding: 10px;
+    position: absolute;
+    z-index: 10;
+    bottom: 125%; /* Position above the (i) */
+    left: 50%;
+    margin-left: -140px; /* Center the tooltip */
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-weight: normal;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    border: 1px solid var(--brand-primary);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+/* Tooltip Arrow */
+.tooltip .tooltip-text::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: var(--brand-primary) transparent transparent transparent;
+}
+
+/* Show on hover */
+.tooltip:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}

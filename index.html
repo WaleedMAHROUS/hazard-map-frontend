@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wildlife Hazard Analysis Tool</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css">
+    
+    <script>
+        tailwind.config = {
+          theme: {
+            extend: {
+              colors: {
+                brand: {
+                  bg: '#111827',
+                  text: '#F3F4F6',
+                  primary: '#F59E0B',
+                  'primary-hover': '#D97706',
+                  secondary: '#374151',
+                  input: '#1F2937'
+                }
+              }
+            }
+          }
+        }
+    </script>
+</head>
+<body class="bg-brand-bg text-brand-text">
+
+    <div class="app-container">
+        
+        <div class="control-panel">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-2xl md:text-3xl font-bold text-white">Hazard Analysis</h1>
+                <button id="start-over-btn" class="text-sm text-gray-400 hover:text-white" title="Reset the form and clear the map">
+                    Start Over
+                </button>
+            </div>
+            
+            <p class="text-gray-400 mb-6">Enter ICAO or coordinates to analyze hazards.</p>
+
+            <div class="mb-4">
+                <button id="tab-icao" class="w-1/2 py-2 px-4 bg-brand-primary text-black font-semibold rounded-l-lg focus:outline-none">ICAO Code</button>
+                <button id="tab-coords" class="w-1/2 py-2 px-4 bg-brand-secondary text-gray-300 font-semibold rounded-r-lg focus:outline-none">Coordinates</button>
+            </div>
+
+            <div id="panel-icao">
+                <label for="icao-input" class="block text-sm font-medium text-gray-300">ICAO Airport Code</label>
+                <input type="text" id="icao-input" class="mt-1 block w-full rounded-md bg-brand-input border-brand-secondary text-white shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm p-3 border" 
+                       placeholder="e.g., HECA, RJAA"
+                       title="Enter a 4-letter ICAO airport code. This will find the airport's location for you.">
+            </div>
+
+            <div id="panel-coords" class="hidden">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="lat-input" class="block text-sm font-medium text-gray-300">Latitude</label>
+                        <input type="text" id="lat-input" class="mt-1 block w-full rounded-md bg-brand-input border-brand-secondary text-white shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm p-3 border" 
+                               placeholder="e.g., 27.180"
+                               title="Enter the latitude for the center of your analysis.">
+                    </div>
+                    <div>
+                        <label for="lon-input" class="block text-sm font-medium text-gray-300">Longitude</label>
+                        <input type="text" id="lon-input" class="mt-1 block w-full rounded-md bg-brand-input border-brand-secondary text-white shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm p-3 border" 
+                               placeholder="e.g., 33.791"
+                               title="Enter the longitude for the center of your analysis.">
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <div class="flex items-center space-x-2">
+                    <label for="radius-input" class="block text-sm font-medium text-gray-300">Analysis Radius (km)</label>
+                    <div class="tooltip">
+                        <span class="cursor-help text-gray-400">(i)</span>
+                        <span class="tooltip-text">
+                            This sets the size of the analysis circle. Standard is 13km.
+                            <br><br>
+                            Larger radii (e.g., 20km+) analyze a much bigger area and are more likely to hit query limits or timeouts.
+                            <br><br>
+                            <b>If your query fails, try a smaller radius.</b>
+                        </span>
+                    </div>
+                </div>
+                <input type="number" id="radius-input" class="mt-1 block w-full rounded-md bg-brand-input border-brand-secondary text-white shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm p-3 border" 
+                       value="13">
+            </div>
+
+            <div class="mt-4">
+                <div class="flex items-center space-x-2">
+                    <label for="min-area-input" class="block text-sm font-medium text-gray-300">Minimum Hazard Area (m²)</label>
+                    <div class="tooltip">
+                        <span class="cursor-help text-gray-400">(i)</span>
+                        <span class="tooltip-text">
+                            This filters out very small features. 10,000 m² is 1 hectare.
+                            <br><br>
+                            A **larger** value (e.g., 20000) means a cleaner report and a faster, less complex query.
+                            <br><br>
+                            A **smaller** value (e.g., 0) will find every tiny feature, which may cause the query to fail from being too complex.
+                            <br><br>
+                            <b>If your query fails, try a larger minimum area.</b>
+                        </span>
+                    </div>
+                </div>
+                <input type="number" id="min-area-input" class="mt-1 block w-full rounded-md bg-brand-input border-brand-secondary text-white shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm p-3 border" 
+                       value="10000">
+            </div>
+
+            <button id="submit-btn" class="mt-6 w-full inline-flex justify-center rounded-md border border-transparent bg-brand-primary py-3 px-4 text-sm font-medium text-black shadow-sm hover:bg-brand-primary-hover focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 focus:ring-offset-brand-bg">
+                <span id="submit-btn-text">Generate Report</span>
+                <div id="submit-btn-loader" class="loader hidden"></div>
+            </button>
+
+            <div id="status-message" class="mt-4 text-sm font-medium h-auto min-h-[1rem] text-center"></div>
+
+            <div class="mt-4 grid grid-cols-2 gap-4">
+                <button id="download-kml-btn" class="w-full inline-flex justify-center rounded-md border border-brand-secondary bg-brand-secondary py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 focus:ring-offset-brand-bg disabled:bg-gray-800 disabled:text-gray-500" disabled>
+                    Download KML
+                </button>
+                <button id="download-csv-btn" class="w-full inline-flex justify-center rounded-md border border-brand-secondary bg-brand-secondary py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 focus:ring-offset-brand-bg disabled:bg-gray-800 disabled:text-gray-500" disabled>
+                    Download CSV
+                </button>
+            </div>
+        </div>
+        
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script src="script.js"></script>
+</body>
+</html>
