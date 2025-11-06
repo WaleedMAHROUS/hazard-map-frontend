@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const startOverBtn = document.getElementById('start-over-btn');
 
     // === 2. STATE VARIABLES ===
-    const API_ENDPOINT = "http://127.0.0.1:5000/generate-report"; // Our local server!
+    const API_ENDPOINT = "https://hazard-map-backend.onrender.com/generate-report"; // Our local server!
     let currentInputMode = 'icao';
     let isFetching = false;
     let lastKML = null;
