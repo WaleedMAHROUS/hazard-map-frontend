@@ -169,3 +169,28 @@ body {
     visibility: visible;
     opacity: 1;
 }
+/* --- STYLES FOR ABOUT MODAL --- */
+
+/* This makes the code tags in the modal look good */
+code {
+    background-color: #1F2937; /* brand-input */
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    color: #F59E0B; /* brand-primary */
+}
+
+/* This ensures the modal scrolls on small screens */
+#about-modal .bg-brand-secondary {
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* Styling for the links in the modal */
+#about-modal a {
+    text-decoration: underline;
+}
+.map-container {
+    position: relative;
+    z-index: 1;
+}

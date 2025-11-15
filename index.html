@@ -35,10 +35,15 @@
         <div class="control-panel">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-2xl md:text-3xl font-bold text-white">Habitat-Scanner</h1>
+                <div class="flex space-x-4">
+                <button id="about-btn" class="text-sm text-gray-400 hover:text-white" title="About this tool">
+                    About
+                </button>
                 <button id="start-over-btn" class="text-sm text-gray-400 hover:text-white" title="Reset the form and clear the map">
                     Start Over
                 </button>
             </div>
+        </div>
             
             <p class="text-gray-400 mb-6">Enter Airport's ICAO Code or any Coordinates to Analyze Hazards.</p>
 
@@ -133,7 +138,49 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
+
     <script src="script.js"></script>
+
+<div id="about-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center">
+        <div class="bg-brand-secondary text-brand-text p-6 md:p-8 rounded-lg shadow-xl w-11/12 md:w-2/3 lg:w-1/2 max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-white">About the Habitat-Scanner Tool</h2>
+                <button id="close-about-btn" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+            </div>
+
+            <p class="mb-4">Welcome to the **Habitat-Scanner Tool**.</p>
+            <p class="mb-4">
+                This tool empowers airport operators, wildlife managers, and safety experts to rapidly identify and map potential wildlife attractants around any aerodrome or location worldwide.
+            </p>
+            <p class="mb-4">
+                By fusing live data from **OpenStreetMap (OSM)** and **Google Earth Engine (GEE)** satellite imagery, this tool scans the selected radius for critical habitats. It generates an interactive map, a KML file, and a CSV report detailing features like water bodies, landfills, wastewater plants, and agricultural areas.
+            </p>
+            <p class="mb-6">
+                This provides a rapid, data-driven baseline for your Wildlife Hazard Management Programme (WHMP) and helps prioritize on-ground surveys.
+            </p>
+
+            <h3 class="text-xl font-bold text-white mb-3">Methodology</h3>
+            <p class="mb-4">This tool implements a two-pronged data-sourcing strategy:</p>
+            <ul class="list-disc list-inside mb-4 space-y-2">
+                <li>
+                    <strong>OpenStreetMap (OSM) Data:</strong> The tool queries the Overpass API for known, human-mapped features. This includes <code class="text-sm bg-brand-input p-1 rounded">landuse=landfill</code>, <code class="text-sm bg-brand-input p-1 rounded">amenity=slaughterhouse</code>, <code class="text-sm bg-brand-input p-1 rounded">natural=water</code>, and other tags associated with wildlife attractants.
+                </li>
+                <li>
+                    <strong>Google Earth Engine (GEE) Data:</strong> To find features not mapped by OSM, the tool analyzes ESA WorldCover satellite data. It automatically identifies and vectorizes <code class="text-sm bg-brand-input p-1 rounded">Water Bodies</code> (Class 80) and <code class="text-sm bg-brand-input p-1 rounded">Cropland</code> (Class 40).
+                </li>
+            </ul>
+            <p class="mb-6">
+                The results from both sources are combined, filtered by your "Minimum Hazard Area" setting, and presented as a single, comprehensive dataset.
+            </p>
+
+            <h3 class="text-xl font-bold text-white mb-3">Contact and Access</h3>
+            <p class="mb-2">Created by Waleed MAHROUS, Stop BIRDSTRIKE.</p>
+            <ul class="list-none space-y-2">
+                <li><a href="https://waleedmahrous.com/#contact-waleed-mahrous" target="_blank" class="text-brand-primary hover:text-brand-primary-hover">Communicate directly with the creator</a></li>
+<li><a href="https://waleedmahrous.com/book-an-appointment-for-a-wildlife-hazard-management-consultation" target="_blank" class="text-brand-primary hover:text-brand-primary-hover">Book a consultation</a></li>
+<li><a href="https://waleedmahrous.com/aviation-wildlife-hazards-management-and-risk-assessment-tool" target="_blank" class="text-brand-primary hover:text-brand-primary-hover">Try the main platform</a></li>
+            </ul>
+        </div>
+    </div>
 </body>
 </html>

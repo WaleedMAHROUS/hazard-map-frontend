@@ -360,4 +360,38 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize the app on load
     resetApp();
+// === 6. ABOUT MODAL LOGIC ===
+
+// Get the new modal elements
+const aboutBtn = document.getElementById('about-btn');
+const aboutModal = document.getElementById('about-modal');
+const closeAboutBtn = document.getElementById('close-about-btn');
+
+// Function to open the modal
+function openAboutModal() {
+    aboutModal.classList.remove('hidden');
+}
+
+// Function to close the modal
+function closeAboutModal() {
+    aboutModal.classList.add('hidden');
+}
+
+// Add event listeners
+if (aboutBtn) {
+    aboutBtn.addEventListener('click', openAboutModal);
+}
+if (closeAboutBtn) {
+    closeAboutBtn.addEventListener('click', closeAboutModal);
+}
+
+// Also close the modal if the user clicks the dark background
+if (aboutModal) {
+    aboutModal.addEventListener('click', (event) => {
+        if (event.target === aboutModal) {
+            closeAboutModal();
+        }
+    });
+}
+
 });
