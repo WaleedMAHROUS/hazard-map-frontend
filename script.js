@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const API_ENDPOINT = "https://hazard-map-backend.onrender.com/generate-report";
     let layerGroup, lastKML, lastCSV, mode = 'icao';
-    let downloadName = "Custom"; // Default name
+    let downloadName = "Custom"; 
 
     // Tab Logic
     document.getElementById('tab-icao').onclick = () => setMode('icao');
@@ -44,7 +44,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 lon: els.lon.value
             };
 
-            // Set Correct Filename
             if (mode === 'icao') {
                 downloadName = payload.icao.toUpperCase();
             } else {
@@ -58,9 +57,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             
             const data = await res.json();
-            
+
+            // Check for Server Error explicitly
             if (!res.ok) {
-                throw new Error(data.error || "Server Error");
+                throw new Error(data.error || "Server Connection Failed");
             }
 
             lastKML = data.kml_string;
@@ -70,6 +70,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if(layerGroup) map.removeLayer(layerGroup);
             layerGroup = L.featureGroup();
             
+            if (data.map_geojson.features.length === 0) {
+                 alert("No hazards found matching your criteria.");
+            }
+
             L.geoJSON(data.map_geojson, {
                 style: f => {
                     const t = f.properties.custom_type;
@@ -88,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // ARP & Radius
             const center = [data.airport_info.lat, data.airport_info.lon];
-            L.marker(center).addTo(layerGroup).bindPopup("ARP");
+            L.marker(center).addTo(layerGroup).bindPopup(`ARP: ${data.airport_info.name}`);
             L.circle(center, {radius: payload.radius_km * 1000, color: 'red', fill: false, weight: 2}).addTo(layerGroup);
             
             layerGroup.addTo(map);
@@ -100,6 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
             els.csv.disabled = false;
             
         } catch (e) {
+            console.error(e);
             els.status.innerHTML = "Error: " + e.message;
             els.status.className = "mt-4 text-center text-red-500";
         } finally {
@@ -110,7 +115,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const download = (d, ext) => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([d]));
-        // Format: YYYY-MM-DD_Scanned_Hazards_ICAO.kml
         const dateStr = new Date().toISOString().split('T')[0];
         a.download = `${dateStr}_Scanned_Hazards_${downloadName}.${ext}`;
         a.click();
