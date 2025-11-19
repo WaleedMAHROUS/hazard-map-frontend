@@ -1,5 +1,5 @@
 /*
- * SCRIPT.JS (Stable Version)
+ * SCRIPT.JS (Stable Version - Correct Labels)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -105,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // 4. MAP DRAWING (Stable)
+    // 4. MAP DRAWING (Stable & Correct Colors)
     function drawMap(geojson, center, radius) {
         if(layerGroup) map.removeLayer(layerGroup);
         layerGroup = L.featureGroup();
@@ -114,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
         L.geoJSON(geojson, {
             style: (f) => {
                 const t = f.properties.custom_type;
+                // Explicit Coloring: Waste/Industrial = Brown, Water = Blue, Veg = Green
                 let col = '#8B4513'; // Default Brown (Waste)
                 if(t === 'water') col = '#3B82F6'; // Blue
                 if(t === 'veg') col = '#10B981'; // Green
@@ -121,8 +122,11 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             onEachFeature: (f, l) => {
                 const area = Math.round(f.properties.area_sq_m || 0).toLocaleString();
-                const type = f.properties.custom_type === 'water' ? 'Water Body' : 
-                             f.properties.custom_type === 'veg' ? 'Vegetation' : 'Ind./Waste';
+                // Explicit Naming
+                let type = 'Industrial/Waste';
+                if (f.properties.custom_type === 'water') type = 'Water Body';
+                if (f.properties.custom_type === 'veg') type = 'Vegetation';
+                
                 l.bindPopup(`<b>${type}</b><br>Area: ${area} m²`);
             }
         }).addTo(layerGroup);
