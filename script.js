@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const API_ENDPOINT = "https://hazard-map-backend.onrender.com/generate-report";
     let layerGroup, lastKML, lastCSV, mode = 'icao';
+    let downloadName = "Custom"; // Default name
 
     // Tab Logic
     document.getElementById('tab-icao').onclick = () => setMode('icao');
@@ -43,6 +44,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 lon: els.lon.value
             };
 
+            // Set Correct Filename
+            if (mode === 'icao') {
+                downloadName = payload.icao.toUpperCase();
+            } else {
+                downloadName = `Custom_${payload.lat}_${payload.lon}`;
+            }
+
             const res = await fetch(API_ENDPOINT, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -61,23 +69,23 @@ document.addEventListener('DOMContentLoaded', () => {
             L.geoJSON(data.map_geojson, {
                 style: f => {
                     const t = f.properties.custom_type;
-                    let c = '#8B4513'; // Default Brown (Industrial/Waste)
-                    if(t === 'water') c = '#3B82F6';
-                    if(t === 'veg') c = '#10B981';
+                    let c = '#8B4513'; // Brown (Waste)
+                    if(t === 'water') c = '#3B82F6'; // Blue
+                    if(t === 'veg') c = '#10B981';   // Green
                     return { color: c, weight: 1, fillOpacity: 0.6 };
                 },
                 onEachFeature: (f, l) => {
                     let name = "Industrial/Waste";
                     if(f.properties.custom_type === 'water') name = "Water Body";
                     if(f.properties.custom_type === 'veg') name = "Vegetation";
-                    l.bindPopup(`<b>${name}</b><br>Area: ${Math.round(f.properties.area_sq_m)} m²`);
+                    l.bindPopup(`<b>${name}</b><br>Area: ${Math.round(f.properties.area_sq_m).toLocaleString()} m²`);
                 }
             }).addTo(layerGroup);
             
             // ARP & Radius
             const center = [data.airport_info.lat, data.airport_info.lon];
             L.marker(center).addTo(layerGroup).bindPopup("ARP");
-            L.circle(center, {radius: payload.radius_km * 1000, color: 'red', fill: false}).addTo(layerGroup);
+            L.circle(center, {radius: payload.radius_km * 1000, color: 'red', fill: false, weight: 2}).addTo(layerGroup);
             
             layerGroup.addTo(map);
             map.fitBounds(layerGroup.getBounds());
@@ -95,12 +103,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const download = (d, n) => {
+    const download = (d, ext) => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([d]));
-        a.download = `Report_${new Date().toISOString().split('T')[0]}.${n}`;
+        // Format: YYYY-MM-DD_Scanned_Hazards_ICAO.kml
+        const dateStr = new Date().toISOString().split('T')[0];
+        a.download = `${dateStr}_Scanned_Hazards_${downloadName}.${ext}`;
         a.click();
     };
     els.csv.onclick = () => download(lastCSV, 'csv');
     els.kml.onclick = () => download(lastKML, 'kml');
+    
+    // Modal
+    document.getElementById('about-btn').onclick = () => document.getElementById('about-modal').classList.remove('hidden');
+    document.getElementById('close-about-btn').onclick = () => document.getElementById('about-modal').classList.add('hidden');
 });
