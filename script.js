@@ -1,4 +1,4 @@
-/* SCRIPT.JS (Fixed: Interactive Radius) */
+/* SCRIPT.JS (Final Production) */
 document.addEventListener('DOMContentLoaded', () => {
     const map = L.map('map', { preferCanvas: true }).setView([20, 0], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const center = [data.airport_info.lat, data.airport_info.lon];
             L.marker(center).addTo(layerGroup).bindPopup(`ARP: ${data.airport_info.name}`);
             
-            // --- FIX: interactive: false allows clicks to pass through the circle ---
+            // FIX: interactive: false allows clicks to pass through the circle
             L.circle(center, {
                 radius: payload.radius_km * 1000, 
                 color: 'red', 
