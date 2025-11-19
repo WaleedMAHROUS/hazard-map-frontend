@@ -1,397 +1,171 @@
 /*
- * SCRIPT.JS (Version 10 - Final)
- * - Removed "Compass Analysis" logic.
- * - Final smart error handling.
- * - Final tooltip fixes (in HTML/CSS).
+ * SCRIPT.JS (Stable Version)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
 
-    // === 1. GET ALL HTML ELEMENTS ===
-    const map = L.map('map').setView([20, 0], 2); // Default view
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
+    // 1. SETUP
+    const map = L.map('map', { preferCanvas: true }).setView([20, 0], 2); // preferCanvas is KEY for stability
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
 
-    // --- Tabs ---
-    const tabIcao = document.getElementById('tab-icao');
-    const tabCoords = document.getElementById('tab-coords');
-    const panelIcao = document.getElementById('panel-icao');
-    const panelCoords = document.getElementById('panel-coords');
+    const inputs = {
+        icao: document.getElementById('icao-input'),
+        lat: document.getElementById('lat-input'),
+        lon: document.getElementById('lon-input'),
+        radius: document.getElementById('radius-input'),
+        minArea: document.getElementById('min-area-input')
+    };
+    const btns = {
+        submit: document.getElementById('submit-btn'),
+        kml: document.getElementById('download-kml-btn'),
+        csv: document.getElementById('download-csv-btn'),
+        reset: document.getElementById('start-over-btn')
+    };
+    const status = document.getElementById('status-message');
+    
+    // CHANGE THIS TO YOUR RENDER URL FOR DEPLOYMENT
+    const API_ENDPOINT = "https://hazard-map-backend.onrender.com/generate-report"; 
+    // const API_ENDPOINT = "http://127.0.0.1:5000/generate-report"; // For Local Testing
 
-    // --- Inputs ---
-    const icaoInput = document.getElementById('icao-input');
-    const latInput = document.getElementById('lat-input');
-    const lonInput = document.getElementById('lon-input');
-    const radiusInput = document.getElementById('radius-input');
-    const minAreaInput = document.getElementById('min-area-input');
-
-    // --- Buttons & Status ---
-    const submitBtn = document.getElementById('submit-btn');
-    const submitBtnText = document.getElementById('submit-btn-text');
-    const submitBtnLoader = document.getElementById('submit-btn-loader');
-    const statusMessage = document.getElementById('status-message');
-    const downloadKmlBtn = document.getElementById('download-kml-btn');
-    const downloadCsvBtn = document.getElementById('download-csv-btn');
-    const startOverBtn = document.getElementById('start-over-btn');
-
-    // === 2. STATE VARIABLES ===
-    const API_ENDPOINT = "https://hazard-map-backend.onrender.com/generate-report"; // Our local server!
-    let currentInputMode = 'icao';
-    let isFetching = false;
+    let currentMode = 'icao';
+    let layerGroup = null;
     let lastKML = null;
     let lastCSV = null;
-    let lastFilenamePrefix = 'report';
-    let currentMapLayerGroup = null;
-    let mapLegend = null;
+    let lastFilename = "report";
 
-    // === 3. EVENT LISTENERS ===
+    // 2. TABS
+    const tIcao = document.getElementById('tab-icao');
+    const tCoords = document.getElementById('tab-coords');
+    
+    tIcao.onclick = () => {
+        currentMode = 'icao';
+        document.getElementById('panel-icao').classList.remove('hidden');
+        document.getElementById('panel-coords').classList.add('hidden');
+        tIcao.className = "w-1/2 py-2 px-4 bg-brand-primary text-black font-semibold rounded-l-lg focus:outline-none";
+        tCoords.className = "w-1/2 py-2 px-4 bg-brand-secondary text-gray-300 font-semibold rounded-r-lg focus:outline-none";
+    };
 
-    tabIcao.addEventListener('click', () => {
-        currentInputMode = 'icao';
-        tabIcao.classList.add('bg-brand-primary', 'text-black');
-        tabIcao.classList.remove('bg-brand-secondary', 'text-gray-300');
-        tabCoords.classList.add('bg-brand-secondary', 'text-gray-300');
-        tabCoords.classList.remove('bg-brand-primary', 'text-black');
-        panelIcao.classList.remove('hidden');
-        panelCoords.classList.add('hidden');
-    });
+    tCoords.onclick = () => {
+        currentMode = 'coords';
+        document.getElementById('panel-coords').classList.remove('hidden');
+        document.getElementById('panel-icao').classList.add('hidden');
+        tCoords.className = "w-1/2 py-2 px-4 bg-brand-primary text-black font-semibold rounded-l-lg focus:outline-none";
+        tIcao.className = "w-1/2 py-2 px-4 bg-brand-secondary text-gray-300 font-semibold rounded-r-lg focus:outline-none";
+    };
 
-    tabCoords.addEventListener('click', () => {
-        currentInputMode = 'coords';
-        tabCoords.classList.add('bg-brand-primary', 'text-black');
-        tabCoords.classList.remove('bg-brand-secondary', 'text-gray-300');
-        tabIcao.classList.add('bg-brand-secondary', 'text-gray-300');
-        tabIcao.classList.remove('bg-brand-primary', 'text-black');
-        panelCoords.classList.remove('hidden');
-        panelIcao.classList.add('hidden');
-    });
+    // 3. SUBMIT
+    btns.submit.onclick = async () => {
+        if(btns.submit.disabled) return;
+        setLoading(true);
+        status.innerHTML = "Scanning... (This takes ~45s)";
+        status.className = "mt-4 text-center text-blue-400";
 
-    submitBtn.addEventListener('click', () => {
-        if (isFetching) return;
-        
-        lastFilenamePrefix = 'report';
-
-        const data = {
-            radius_km: parseFloat(radiusInput.value) || 13.0,
-            min_area_sq_m: parseFloat(minAreaInput.value) || 0,
-            mode: currentInputMode
+        const payload = {
+            radius_km: parseFloat(inputs.radius.value) || 13,
+            min_area_sq_m: parseFloat(inputs.minArea.value) || 5000,
+            mode: currentMode
         };
 
-        if (currentInputMode === 'icao') {
-            data.icao = icaoInput.value.toUpperCase();
-            if (data.icao.length !== 4) {
-                showStatus("Error: ICAO code must be 4 letters.", 'error');
-                return;
-            }
-            lastFilenamePrefix = data.icao.toLowerCase();
+        if (currentMode === 'icao') {
+            payload.icao = inputs.icao.value.toUpperCase();
+            lastFilename = payload.icao;
+            if(payload.icao.length !== 4) { setLoading(false); return alert("ICAO must be 4 chars"); }
         } else {
-            data.lat = parseFloat(latInput.value);
-            data.lon = parseFloat(lonInput.value);
-            if (isNaN(data.lat) || isNaN(data.lon)) {
-                showStatus("Error: Invalid Latitude or Longitude.", 'error');
-                return;
-            }
-            lastFilenamePrefix = `custom_${data.lat.toFixed(2)}_${data.lon.toFixed(2)}`;
+            payload.lat = parseFloat(inputs.lat.value);
+            payload.lon = parseFloat(inputs.lon.value);
+            lastFilename = "Custom_Location";
         }
-        fetchHazardReport(data);
-    });
-
-    downloadKmlBtn.addEventListener('click', () => {
-        if (lastKML) {
-            const filename = `${lastFilenamePrefix}_hazard_report.kml`;
-            downloadData(lastKML, filename, 'application/vnd.google-earth.kml+xml');
-        }
-    });
-
-    downloadCsvBtn.addEventListener('click', () => {
-        if (lastCSV) {
-            const filename = `${lastFilenamePrefix}_hazard_report.csv`;
-            downloadData(lastCSV, filename, 'text/csv');
-        }
-    });
-    
-    startOverBtn.addEventListener('click', resetApp);
-
-    // === 4. CORE FUNCTIONS ===
-
-    function resetApp() {
-        icaoInput.value = '';
-        latInput.value = '';
-        lonInput.value = '';
-        radiusInput.value = '13';
-        minAreaInput.value = '10000';
-        
-        showStatus("", 'info');
-        setLoadingState(false);
-        downloadKmlBtn.disabled = true;
-        downloadCsvBtn.disabled = true;
-        
-        lastKML = null;
-        lastCSV = null;
-        lastFilenamePrefix = 'report';
-
-        if (currentMapLayerGroup) {
-            map.removeLayer(currentMapLayerGroup);
-            currentMapLayerGroup = null;
-        }
-        if (mapLegend) {
-            map.removeControl(mapLegend);
-            mapLegend = null;
-        }
-        map.setView([20, 0], 2);
-    }
-
-    async function fetchHazardReport(data) {
-        setLoadingState(true);
-        showStatus("Generating report... This may take up to 90 seconds.", 'loading');
 
         try {
-            const response = await fetch(API_ENDPOINT, {
+            const res = await fetch(API_ENDPOINT, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
             });
+            
+            if(!res.ok) throw new Error("Server Error");
+            const data = await res.json();
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `Server error: ${response.status}`);
-            }
+            lastKML = data.kml_string;
+            lastCSV = data.csv_string;
+            
+            drawMap(data.map_geojson, data.airport_info, payload.radius_km);
+            
+            status.innerHTML = `Success! Found ${data.feature_count} features.`;
+            status.className = "mt-4 text-center text-green-400";
+            btns.csv.disabled = false;
+            btns.kml.disabled = false;
 
-            const result = await response.json();
-            
-            lastKML = result.kml_string;
-            lastCSV = result.csv_string;
-            
-            updateMap(result.map_geojson, result.airport_info.lat, result.airport_info.lon, data.radius_km, data.mode);
-            addMapLegend();
-            
-            // --- REMOVED ANALYSIS SUMMARY ---
-            showStatus(
-                `Success! Found ${result.feature_count} features.`,
-                'success'
-            );
-            
-            downloadKmlBtn.disabled = false;
-            downloadCsvBtn.disabled = false;
-
-        } catch (error) {
-            console.error('Fetch error:', error);
-            const rawError = error.message;
-            
-            if (rawError.includes("504") || rawError.includes("Gateway Timeout")) {
-                showStatus("Error: The OpenStreetMap server (a free service) is temporarily busy. Please click 'Start Over' and try again in a moment.", 'error');
-            
-            } else if (rawError.includes("5000 elements") || rawError.includes("query aborted")) {
-                showStatus("Analysis Failed: The selected area is too complex for a single query. Please try again with a smaller 'Analysis Radius' or a *larger* 'Minimum Hazard Area'.", 'error');
-            
-            } else if (rawError.includes("not found")) {
-                showStatus(`Error: ${rawError}. Please check the ICAO code.`, 'error');
-
-            } else {
-                showStatus(`An unknown error occurred: ${rawError}`, 'error');
-            }
+        } catch (e) {
+            console.error(e);
+            status.innerHTML = "Error: " + e.message;
+            status.className = "mt-4 text-center text-red-500";
         } finally {
-            setLoadingState(false);
+            setLoading(false);
         }
-    }
+    };
 
-    function updateMap(geojson, lat, lon, radius_km, inputMode) {
-        if (currentMapLayerGroup) {
-            map.removeLayer(currentMapLayerGroup);
-        }
-        
-        currentMapLayerGroup = L.featureGroup();
-        
-        const hazardLayer = L.geoJSON(geojson, {
-            style: getHazardStyle,
-            onEachFeature: (feature, layer) => {
-                let popupContent = "<b>Hazard Attractant</b><br><hr>";
-                if (feature.properties && feature.properties.tags) {
-                    const tags = feature.properties.tags;
-                    popupContent += `<b>Name:</b> ${tags.name || 'N/A'}<br>`;
-                    popupContent += `<b>Type:</b> ${tags.landuse || tags.natural || 'Unknown'}`;
-                }
-                layer.bindPopup(popupContent);
+    // 4. MAP DRAWING (Stable)
+    function drawMap(geojson, center, radius) {
+        if(layerGroup) map.removeLayer(layerGroup);
+        layerGroup = L.featureGroup();
+
+        // Draw Features
+        L.geoJSON(geojson, {
+            style: (f) => {
+                const t = f.properties.custom_type;
+                let col = '#8B4513'; // Default Brown (Waste)
+                if(t === 'water') col = '#3B82F6'; // Blue
+                if(t === 'veg') col = '#10B981'; // Green
+                return { color: col, weight: 1, fillOpacity: 0.6 };
+            },
+            onEachFeature: (f, l) => {
+                const area = Math.round(f.properties.area_sq_m || 0).toLocaleString();
+                const type = f.properties.custom_type === 'water' ? 'Water Body' : 
+                             f.properties.custom_type === 'veg' ? 'Vegetation' : 'Ind./Waste';
+                l.bindPopup(`<b>${type}</b><br>Area: ${area} m²`);
             }
-        });
-        currentMapLayerGroup.addLayer(hazardLayer);
+        }).addTo(layerGroup);
 
-        let iconHtml = '✈️';
-        let popupText = '<b>Airport Center (ARP)</b>';
-        if (inputMode === 'coords') {
-            iconHtml = '📍';
-            popupText = '<b>Custom Center Point</b>';
-        }
+        // ARP
+        const arpIcon = L.divIcon({html: '✈️', className: 'text-xl'});
+        L.marker([center.lat, center.lon], {icon: arpIcon}).addTo(layerGroup).bindPopup("ARP");
 
-        const marker = L.marker([lat, lon], {
-            icon: L.divIcon({
-                className: 'leaflet-div-icon',
-                html: iconHtml,
-                iconSize: [24, 24]
-            })
-        }).bindPopup(popupText);
-        currentMapLayerGroup.addLayer(marker);
-          
-        const circleFill = L.circle([lat, lon], {
-            radius: radius_km * 1000,
-            color: 'transparent',
-            fillColor: '#F59E0B',
-            fillOpacity: 0.1,
-            weight: 0,
-            interactive: false
-        });
-        currentMapLayerGroup.addLayer(circleFill);
+        // Radius
+        L.circle([center.lat, center.lon], {
+            radius: radius * 1000, color: '#EF4444', fill: false, weight: 2
+        }).addTo(layerGroup);
 
-        const circleOutline = L.circle([lat, lon], {
-            radius: radius_km * 1000,
-            color: '#F59E0B',
-            fill: false,
-            weight: 2,
-            interactive: true
-        }).bindPopup(`<b>${radius_km}km Analysis Radius</b>`);
-        currentMapLayerGroup.addLayer(circleOutline);
-
-        currentMapLayerGroup.addTo(map);
-        map.fitBounds(currentMapLayerGroup.getBounds().pad(0.1));
+        layerGroup.addTo(map);
+        map.fitBounds(layerGroup.getBounds());
     }
+
+    // 5. UTILS
+    function setLoading(b) {
+        btns.submit.disabled = b;
+        document.getElementById('submit-btn-loader').classList.toggle('hidden', !b);
+        document.getElementById('submit-btn-text').classList.toggle('hidden', b);
+    }
+
+    function download(content, ext, type) {
+        const blob = new Blob([content], {type: type});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${new Date().toISOString().split('T')[0]}_Scanned_Hazards_${lastFilename}.${ext}`;
+        a.click();
+    }
+
+    btns.csv.onclick = () => download(lastCSV, 'csv', 'text/csv');
+    btns.kml.onclick = () => download(lastKML, 'kml', 'application/vnd.google-earth.kml+xml');
+    btns.reset.onclick = () => { 
+        inputs.icao.value = ""; 
+        if(layerGroup) map.removeLayer(layerGroup);
+        status.innerHTML = "";
+        btns.csv.disabled = true; btns.kml.disabled = true;
+    };
     
-    function addMapLegend() {
-        if (mapLegend) {
-            map.removeControl(mapLegend);
-        }
-        
-        mapLegend = L.control({ position: 'bottomright' });
-
-        mapLegend.onAdd = function (map) {
-            const div = L.DomUtil.create('div', 'leaflet-legend');
-            let content = '<h4>Legend</h4>';
-            const categories = [
-                { color: '#0000FF', label: 'Water' },
-                { color: '#228B22', label: 'Cropland / Forest' },
-                { color: '#8B4513', label: 'Waste / Landfill' },
-                { color: '#FFFF00', label: 'Other' }
-            ];
-            
-            categories.forEach(item => {
-                content += `
-                    <div class="legend-item">
-                        <span class="legend-color-box" style="background-color: ${item.color}; opacity: 0.5;"></span>
-                        ${item.label}
-                    </div>
-                `;
-            });
-            
-            div.innerHTML = content;
-            return div;
-        };
-
-        mapLegend.addTo(map);
-    }
-
-    // === 5. HELPER FUNCTIONS ===
-    
-    function getHazardStyle(feature) {
-        let color = '#FFFF00'; // Default (yellow)
-        if (feature.properties && feature.properties.tags) {
-            const tags = feature.properties.tags;
-            if (tags.natural === 'water' || tags.landuse === 'reservoir') {
-                color = '#0000FF'; // Blue
-            } else if (tags.landuse === 'farmland' || tags.natural === 'wood' || tags.landuse === 'forest') {
-                color = '#228B22'; // Green
-            } else if (tags.landuse === 'landfill' || tags.amenity === 'waste_disposal' || tags.man_made === 'wastewater_plant') {
-                color = '#8B4513';
-            }
-        }
-        return {
-            color: color,
-            weight: 2,
-            opacity: 0.8,
-            fillColor: color,
-            fillOpacity: 0.3
-        };
-    }
-
-    function downloadData(data, filename, type) {
-        const blob = new Blob([data], { type: type });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-
-    function setLoadingState(isLoading) {
-        isFetching = isLoading;
-        submitBtn.disabled = isLoading;
-        if (isLoading) {
-            submitBtnText.classList.add('hidden');
-            submitBtnLoader.classList.remove('hidden');
-            downloadKmlBtn.disabled = true;
-            downloadCsvBtn.disabled = true;
-        } else {
-            submitBtnText.classList.remove('hidden');
-            submitBtnLoader.classList.add('hidden');
-        }
-    }
-
-    // --- UPDATED: This function no longer shows the analysis summary ---
-    function showStatus(message, type = 'info') {
-        let html = `<span class="block">${message}</span>`;
-        
-        statusMessage.innerHTML = html;
-        statusMessage.className = "mt-4 text-sm font-medium h-auto min-h-[1rem] text-center";
-        
-        switch (type) {
-            case 'error':
-                statusMessage.classList.add('text-red-500');
-                break;
-            case 'success':
-                statusMessage.classList.add('text-green-400');
-                break;
-            case 'loading':
-                statusMessage.classList.add('text-blue-400');
-                break;
-            default:
-                statusMessage.classList.add('text-gray-400');
-        }
-    }
-    
-    // Initialize the app on load
-    resetApp();
-// === 6. ABOUT MODAL LOGIC ===
-
-// Get the new modal elements
-const aboutBtn = document.getElementById('about-btn');
-const aboutModal = document.getElementById('about-modal');
-const closeAboutBtn = document.getElementById('close-about-btn');
-
-// Function to open the modal
-function openAboutModal() {
-    aboutModal.classList.remove('hidden');
-}
-
-// Function to close the modal
-function closeAboutModal() {
-    aboutModal.classList.add('hidden');
-}
-
-// Add event listeners
-if (aboutBtn) {
-    aboutBtn.addEventListener('click', openAboutModal);
-}
-if (closeAboutBtn) {
-    closeAboutBtn.addEventListener('click', closeAboutModal);
-}
-
-// Also close the modal if the user clicks the dark background
-if (aboutModal) {
-    aboutModal.addEventListener('click', (event) => {
-        if (event.target === aboutModal) {
-            closeAboutModal();
-        }
-    });
-}
-
+    // Modal
+    document.getElementById('about-btn').onclick = () => document.getElementById('about-modal').classList.remove('hidden');
+    document.getElementById('close-about-btn').onclick = () => document.getElementById('about-modal').classList.add('hidden');
 });
