@@ -56,8 +56,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload)
             });
-            if (!res.ok) throw new Error("Server Error");
+            
             const data = await res.json();
+            
+            if (!res.ok) {
+                throw new Error(data.error || "Server Error");
+            }
 
             lastKML = data.kml_string;
             lastCSV = data.csv_string;
