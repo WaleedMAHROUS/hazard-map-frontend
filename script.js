@@ -1,4 +1,4 @@
-/* SCRIPT.JS (Corrected Version) */
+/* SCRIPT.JS (Corrected Version with Distance Display) */
 document.addEventListener('DOMContentLoaded', () => {
     const map = L.map('map', { preferCanvas: true }).setView([20, 0], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
@@ -27,6 +27,18 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('panel-icao').classList.toggle('hidden', m !== 'icao');
         document.getElementById('panel-coords').classList.toggle('hidden', m === 'icao');
     }
+
+    // Helper function to calculate distance between two points (Haversine formula)
+    const calculateDistance = (lat1, lon1, lat2, lon2) => {
+        const R = 6371; // Earth radius in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    };
 
     // Main Logic
     els.submit.onclick = async () => {
@@ -79,6 +91,9 @@ document.addEventListener('DOMContentLoaded', () => {
             let addedFeatures = 0;
             let skippedFeatures = 0;
 
+            const arpLat = data.airport_info.lat;
+            const arpLon = data.airport_info.lon;
+
             // Process each feature with better error handling
             data.map_geojson.features.forEach((feature, index) => {
                 try {
@@ -94,7 +109,36 @@ document.addEventListener('DOMContentLoaded', () => {
                             let name = "Industrial/Waste";
                             if(f.properties.custom_type === 'water') name = "Water Body";
                             if(f.properties.custom_type === 'veg') name = "Vegetation";
-                            l.bindPopup(`<b>${name}</b><br>Area: ${Math.round(f.properties.area_sq_m).toLocaleString()} m²`);
+                            
+                            // Calculate distance from ARP to feature centroid
+                            const featureLayer = l.toGeoJSON();
+                            let featureLat, featureLon;
+                            
+                            // Get centroid coordinates based on geometry type
+                            if (featureLayer.geometry.type === 'Polygon') {
+                                const coords = featureLayer.geometry.coordinates[0];
+                                const sumLat = coords.reduce((sum, c) => sum + c[1], 0);
+                                const sumLon = coords.reduce((sum, c) => sum + c[0], 0);
+                                featureLat = sumLat / coords.length;
+                                featureLon = sumLon / coords.length;
+                            } else if (featureLayer.geometry.type === 'MultiPolygon') {
+                                const coords = featureLayer.geometry.coordinates[0][0];
+                                const sumLat = coords.reduce((sum, c) => sum + c[1], 0);
+                                const sumLon = coords.reduce((sum, c) => sum + c[0], 0);
+                                featureLat = sumLat / coords.length;
+                                featureLon = sumLon / coords.length;
+                            } else if (featureLayer.geometry.type === 'Point') {
+                                featureLon = featureLayer.geometry.coordinates[0];
+                                featureLat = featureLayer.geometry.coordinates[1];
+                            } else {
+                                // Default fallback
+                                featureLat = arpLat;
+                                featureLon = arpLon;
+                            }
+                            
+                            const distance = calculateDistance(arpLat, arpLon, featureLat, featureLon);
+                            
+                            l.bindPopup(`<b>${name}</b><br>Area: ${Math.round(f.properties.area_sq_m).toLocaleString()} m²<br><b>Distance from ARP:</b> ${distance.toFixed(2)} km`);
                         }
                     });
                     
@@ -116,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // ARP & Radius
             const center = [data.airport_info.lat, data.airport_info.lon];
-            L.marker(center).addTo(layerGroup).bindPopup(`ARP: ${data.airport_info.name}`);
+            L.marker(center).addTo(layerGroup).bindPopup(`<b>ARP: ${data.airport_info.name}</b><br>Coordinates: ${center[0].toFixed(4)}, ${center[1].toFixed(4)}`);
             
             // Circle with interactive: false to allow clicks to pass through
             L.circle(center, {
