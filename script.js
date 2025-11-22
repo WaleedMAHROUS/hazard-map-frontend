@@ -1,4 +1,4 @@
-/* SCRIPT.JS (Final Production) */
+/* SCRIPT.JS (Corrected Version) */
 document.addEventListener('DOMContentLoaded', () => {
     const map = L.map('map', { preferCanvas: true }).setView([20, 0], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
@@ -69,31 +69,56 @@ document.addEventListener('DOMContentLoaded', () => {
             if(layerGroup) map.removeLayer(layerGroup);
             layerGroup = L.featureGroup();
             
-            if (data.map_geojson.features.length === 0) {
-                 alert("No hazards found matching your criteria.");
+            const featureCount = data.map_geojson.features.length;
+            console.log(`Received ${featureCount} features from backend`);
+            
+            if (featureCount === 0) {
+                alert("No hazards found matching your criteria. Try reducing the minimum area filter.");
             }
 
-            L.geoJSON(data.map_geojson, {
-                style: f => {
-                    const t = f.properties.custom_type;
-                    let c = '#8B4513'; // Brown (Waste)
-                    if(t === 'water') c = '#3B82F6'; // Blue
-                    if(t === 'veg') c = '#10B981';   // Green
-                    return { color: c, weight: 1, fillOpacity: 0.6 };
-                },
-                onEachFeature: (f, l) => {
-                    let name = "Industrial/Waste";
-                    if(f.properties.custom_type === 'water') name = "Water Body";
-                    if(f.properties.custom_type === 'veg') name = "Vegetation";
-                    l.bindPopup(`<b>${name}</b><br>Area: ${Math.round(f.properties.area_sq_m).toLocaleString()} m²`);
+            let addedFeatures = 0;
+            let skippedFeatures = 0;
+
+            // Process each feature with better error handling
+            data.map_geojson.features.forEach((feature, index) => {
+                try {
+                    const geojsonLayer = L.geoJSON(feature, {
+                        style: f => {
+                            const t = f.properties.custom_type;
+                            let c = '#8B4513'; // Brown (Waste)
+                            if(t === 'water') c = '#3B82F6'; // Blue
+                            if(t === 'veg') c = '#10B981';   // Green
+                            return { color: c, weight: 1, fillOpacity: 0.6 };
+                        },
+                        onEachFeature: (f, l) => {
+                            let name = "Industrial/Waste";
+                            if(f.properties.custom_type === 'water') name = "Water Body";
+                            if(f.properties.custom_type === 'veg') name = "Vegetation";
+                            l.bindPopup(`<b>${name}</b><br>Area: ${Math.round(f.properties.area_sq_m).toLocaleString()} m²`);
+                        }
+                    });
+                    
+                    // Only add if the layer was successfully created
+                    if (geojsonLayer.getLayers().length > 0) {
+                        geojsonLayer.addTo(layerGroup);
+                        addedFeatures++;
+                    } else {
+                        skippedFeatures++;
+                        console.warn(`Feature ${index} created no layers`);
+                    }
+                } catch (error) {
+                    skippedFeatures++;
+                    console.error(`Error adding feature ${index}:`, error);
                 }
-            }).addTo(layerGroup);
+            });
+            
+            console.log(`Added ${addedFeatures} features to map, skipped ${skippedFeatures}`);
             
             // ARP & Radius
             const center = [data.airport_info.lat, data.airport_info.lon];
             L.marker(center).addTo(layerGroup).bindPopup(`ARP: ${data.airport_info.name}`);
             
-            // FIX: interactive: false allows clicks to pass through the circle
+            // Circle with interactive: false to allow clicks to pass through
             L.circle(center, {
                 radius: payload.radius_km * 1000, 
                 color: 'red', 
@@ -105,7 +130,12 @@ document.addEventListener('DOMContentLoaded', () => {
             layerGroup.addTo(map);
             map.fitBounds(layerGroup.getBounds());
             
-            els.status.innerHTML = `Success! Found ${data.feature_count} features.`;
+            // More informative success message
+            const displayMsg = addedFeatures === data.feature_count 
+                ? `Success! Found and displayed ${data.feature_count} features.`
+                : `Success! Found ${data.feature_count} features (${addedFeatures} displayed on map).`;
+            
+            els.status.innerHTML = displayMsg;
             els.status.className = "mt-4 text-center text-green-400";
             els.kml.disabled = false;
             els.csv.disabled = false;
