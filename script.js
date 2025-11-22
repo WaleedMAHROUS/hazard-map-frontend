@@ -206,4 +206,47 @@ document.addEventListener('DOMContentLoaded', () => {
     // Modal
     document.getElementById('about-btn').onclick = () => document.getElementById('about-modal').classList.remove('hidden');
     document.getElementById('close-about-btn').onclick = () => document.getElementById('about-modal').classList.add('hidden');
+    
+    // Start Over functionality
+    const startOverBtn = document.querySelector('a[href*="Start Over"]') || 
+                         document.getElementById('start-over-btn') ||
+                         Array.from(document.querySelectorAll('a')).find(a => a.textContent.includes('Start Over'));
+    
+    if (startOverBtn) {
+        startOverBtn.onclick = (e) => {
+            e.preventDefault();
+            
+            // Clear all inputs
+            els.icao.value = '';
+            els.lat.value = '';
+            els.lon.value = '';
+            els.radius.value = '13';
+            els.minArea.value = '10000';
+            
+            // Clear map layers
+            if (layerGroup) {
+                map.removeLayer(layerGroup);
+                layerGroup = null;
+            }
+            
+            // Reset map view
+            map.setView([20, 0], 2);
+            
+            // Clear status message
+            els.status.innerHTML = '';
+            els.status.className = 'mt-4 text-center';
+            
+            // Disable download buttons
+            els.kml.disabled = true;
+            els.csv.disabled = true;
+            
+            // Clear stored data
+            lastKML = null;
+            lastCSV = null;
+            downloadName = "Custom";
+            
+            // Switch to ICAO tab
+            setMode('icao');
+        };
+    }
 });
