@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const payload = {
                 radius_km: parseFloat(els.radius.value) || 13,
-                min_area_sq_m: parseFloat(els.minArea.value) || 5000,
+                min_area_sq_m: els.minArea.value === '' ? 5000 : parseFloat(els.minArea.value),
                 mode: mode,
                 icao: els.icao.value,
                 lat: els.lat.value,
