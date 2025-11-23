@@ -1,186 +1,273 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wildlife Hazard Analysis Tool</title>
-    
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="style.css">
-    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <script>
         tailwind.config = {
-          theme: {
-            extend: {
-              colors: {
-                brand: {
-                  bg: '#111827',
-                  text: '#F3F4F6',
-                  primary: '#F59E0B',
-                  'primary-hover': '#D97706',
-                  secondary: '#374151',
-                  input: '#1F2937'
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            bg: '#111827',
+                            text: '#F3F4F6',
+                            primary: '#F59E0B',
+                            'primary-hover': '#D97706',
+                            secondary: '#374151',
+                            input: '#1F2937'
+                        }
+                    }
                 }
-              }
             }
-          }
         }
     </script>
 </head>
-<body class="bg-brand-bg text-brand-text">
 
-    <div class="app-container">
-        
-        <div class="control-panel">
-            <div class="flex justify-between items-center mb-6">
-                <h1 class="text-2xl md:text-3xl font-bold text-white">Habitat-Scanner</h1>
-                <div class="flex space-x-4">
-                <button id="about-btn" class="text-sm text-gray-400 hover:text-white" title="About this tool">
-                    About
-                </button>
-                <button id="start-over-btn" class="text-sm text-gray-400 hover:text-white" title="Reset the form and clear the map">
-                    Start Over
-                </button>
+<body class="bg-brand-bg text-brand-text h-screen overflow-hidden flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-brand-secondary p-4 shadow-md z-20 flex justify-between items-center shrink-0">
+        <div class="flex items-center space-x-4">
+            <h1 class="text-xl md:text-2xl font-bold text-white">Habitat-Scanner <span
+                    class="text-brand-primary text-sm font-normal">v0.5</span></h1>
+        </div>
+        <div class="flex space-x-4">
+            <button id="about-btn" class="text-sm text-gray-400 hover:text-white">About</button>
+            <button id="start-over-btn" class="text-sm text-gray-400 hover:text-white">Start Over</button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden relative">
+
+        <!-- Left Panel: Controls -->
+        <div class="control-panel w-full md:w-1/4 min-w-[320px] bg-brand-bg border-r border-brand-secondary flex flex-col overflow-y-auto z-10 transition-transform duration-300 absolute md:relative h-full"
+            id="left-panel">
+            <div class="p-4 space-y-6">
+
+                <!-- Input Section -->
+                <div>
+                    <h2 class="text-lg font-semibold text-brand-primary mb-2">Analysis Parameters</h2>
+                    <div class="flex mb-4 rounded-lg overflow-hidden border border-brand-secondary">
+                        <button id="tab-icao"
+                            class="flex-1 py-2 bg-brand-primary text-black font-semibold">ICAO</button>
+                        <button id="tab-coords"
+                            class="flex-1 py-2 bg-brand-secondary text-gray-300 hover:bg-gray-700">Coords</button>
+                    </div>
+
+                    <div id="panel-icao" class="space-y-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 uppercase tracking-wider mb-1">Airport
+                                Code</label>
+                            <input type="text" id="icao-input"
+                                class="w-full bg-brand-input border border-brand-secondary rounded p-2 text-white focus:border-brand-primary focus:outline-none"
+                                placeholder="e.g., HECA">
+                        </div>
+                    </div>
+
+                    <div id="panel-coords" class="hidden space-y-3">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label
+                                    class="block text-xs text-gray-400 uppercase tracking-wider mb-1">Latitude</label>
+                                <input type="text" id="lat-input"
+                                    class="w-full bg-brand-input border border-brand-secondary rounded p-2 text-white focus:border-brand-primary focus:outline-none"
+                                    placeholder="27.18">
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-xs text-gray-400 uppercase tracking-wider mb-1">Longitude</label>
+                                <input type="text" id="lon-input"
+                                    class="w-full bg-brand-input border border-brand-secondary rounded p-2 text-white focus:border-brand-primary focus:outline-none"
+                                    placeholder="33.79">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 mt-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 uppercase tracking-wider mb-1">Radius (km)</label>
+                            <input type="number" id="radius-input" value="13"
+                                class="w-full bg-brand-input border border-brand-secondary rounded p-2 text-white focus:border-brand-primary focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 uppercase tracking-wider mb-1">Min Area
+                                (m²)</label>
+                            <input type="number" id="min-area-input" value="5000"
+                                class="w-full bg-brand-input border border-brand-secondary rounded p-2 text-white focus:border-brand-primary focus:outline-none">
+                        </div>
+                    </div>
+
+                    <button id="submit-btn"
+                        class="mt-4 w-full bg-brand-primary hover:bg-brand-primary-hover text-black font-bold py-3 rounded transition-colors flex justify-center items-center">
+                        <span>Run Analysis</span>
+                        <div id="submit-btn-loader" class="loader hidden ml-2"></div>
+                    </button>
+                    <div id="status-message" class="text-center text-sm mt-2 min-h-[20px]"></div>
+                </div>
+
+                <!-- Filters (Hidden initially) -->
+                <div id="filters-section" class="hidden border-t border-brand-secondary pt-4">
+                    <h2 class="text-lg font-semibold text-brand-primary mb-2">Filters</h2>
+                    <div class="space-y-2">
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" checked
+                                class="form-checkbox text-brand-primary rounded bg-brand-input border-brand-secondary"
+                                data-filter="waste">
+                            <span class="text-sm">Waste / Industrial</span>
+                        </label>
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" checked
+                                class="form-checkbox text-blue-500 rounded bg-brand-input border-brand-secondary"
+                                data-filter="water">
+                            <span class="text-sm">Water Bodies</span>
+                        </label>
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" checked
+                                class="form-checkbox text-green-500 rounded bg-brand-input border-brand-secondary"
+                                data-filter="veg">
+                            <span class="text-sm">Vegetation</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Downloads (Hidden initially) -->
+                <div id="downloads-section" class="hidden border-t border-brand-secondary pt-4">
+                    <h2 class="text-lg font-semibold text-brand-primary mb-2">Export</h2>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="download-kml-btn"
+                            class="bg-brand-secondary hover:bg-gray-600 text-white py-2 rounded text-sm">KML</button>
+                        <button id="download-csv-btn"
+                            class="bg-brand-secondary hover:bg-gray-600 text-white py-2 rounded text-sm">CSV</button>
+                    </div>
+                </div>
+
             </div>
         </div>
-            
-            <p class="text-gray-400 mb-6">Enter Airport's ICAO Code or any Coordinates to Analyze Hazards.</p>
 
-            <div class="mb-4">
-                <button id="tab-icao" class="w-1/2 py-2 px-4 bg-brand-primary text-black font-semibold rounded-l-lg focus:outline-none">ICAO Code</button>
-                <button id="tab-coords" class="w-1/2 py-2 px-4 bg-brand-secondary text-gray-300 font-semibold rounded-r-lg focus:outline-none">Coordinates</button>
-            </div>
+        <!-- Right Panel: Map & Dashboard -->
+        <div class="flex-1 flex flex-col relative h-full">
 
-            <div id="panel-icao">
-                <label for="icao-input" class="block text-sm font-medium text-gray-300">ICAO Airport Code</label>
-                <input type="text" id="icao-input" class="mt-1 block w-full rounded-md bg-brand-input border-brand-secondary text-white shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm p-3 border" 
-                       placeholder="e.g., HECA, RJAA"
-                       title="Enter a 4-letter ICAO airport code. This will find the airport's location for you.">
-            </div>
+            <!-- Map Area -->
+            <div id="map" class="flex-1 bg-gray-900 z-0"></div>
 
-            <div id="panel-coords" class="hidden">
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label for="lat-input" class="block text-sm font-medium text-gray-300">Latitude</label>
-                        <input type="text" id="lat-input" class="mt-1 block w-full rounded-md bg-brand-input border-brand-secondary text-white shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm p-3 border" 
-                               placeholder="e.g., 27.180"
-                               title="Enter the latitude for the center of your analysis.">
+            <!-- Dashboard Overlay (Bottom) -->
+            <div id="dashboard-panel"
+                class="h-1/3 bg-brand-bg/95 backdrop-blur border-t border-brand-secondary absolute bottom-0 w-full z-10 transition-transform duration-300 transform translate-y-full flex flex-col">
+
+                <!-- Toggle Handle -->
+                <div class="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-brand-bg border border-brand-secondary border-b-0 rounded-t-lg px-4 py-1 cursor-pointer hover:bg-brand-secondary"
+                    id="dashboard-toggle">
+                    <span class="text-xs font-bold text-brand-primary">DASHBOARD</span>
+                </div>
+
+                <div class="flex-1 flex overflow-hidden p-4 space-x-4">
+
+                    <!-- Stats Cards -->
+                    <div class="w-1/4 min-w-[200px] flex flex-col space-y-2 overflow-y-auto">
+                        <div class="bg-brand-input p-3 rounded border border-brand-secondary">
+                            <div class="text-xs text-gray-400">Total Habitats</div>
+                            <div class="text-2xl font-bold text-white" id="stat-total">0</div>
+                        </div>
+
+                        <!-- Analysis Log -->
+                        <div class="bg-brand-input p-3 rounded border border-brand-secondary flex-1 overflow-y-auto">
+                            <div class="text-xs text-gray-400 mb-2 font-bold uppercase tracking-wider">Analysis Log
+                            </div>
+                            <div id="analysis-log" class="text-[10px] text-gray-300 space-y-1 font-mono">
+                                <p class="text-gray-500 italic">Run analysis to see details...</p>
+                            </div>
+                        </div>
+                        <div class="bg-brand-input p-3 rounded border border-brand-secondary">
+                            <div class="text-xs text-gray-400">High Risk</div>
+                            <div class="text-2xl font-bold text-red-500" id="stat-high-risk">0</div>
+                        </div>
+                        <div class="bg-brand-input p-3 rounded border border-brand-secondary">
+                            <div class="text-xs text-gray-400">Total Area (km²)</div>
+                            <div class="text-2xl font-bold text-brand-primary" id="stat-area">0</div>
+                        </div>
                     </div>
-                    <div>
-                        <label for="lon-input" class="block text-sm font-medium text-gray-300">Longitude</label>
-                        <input type="text" id="lon-input" class="mt-1 block w-full rounded-md bg-brand-input border-brand-secondary text-white shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm p-3 border" 
-                               placeholder="e.g., 33.791"
-                               title="Enter the longitude for the center of your analysis.">
+
+                    <!-- Chart -->
+                    <div
+                        class="w-1/4 min-w-[200px] bg-brand-input rounded border border-brand-secondary p-2 flex justify-center items-center">
+                        <canvas id="hazardChart"></canvas>
                     </div>
+
+                    <!-- Feature List -->
+                    <div
+                        class="flex-1 bg-brand-input rounded border border-brand-secondary overflow-hidden flex flex-col">
+                        <div <div
+                            class="p-2 border-b border-brand-secondary bg-brand-secondary/50 flex justify-between text-xs font-bold text-gray-300">
+                            <span class="w-1/3 flex items-center">
+                                Type
+                                <div class="group relative ml-1">
+                                    <span class="cursor-help text-gray-500 hover:text-white">(?)</span>
+                                    <div
+                                        class="hidden group-hover:block absolute left-0 top-full mt-1 w-48 bg-gray-800 text-gray-200 text-[10px] p-2 rounded border border-gray-600 z-50">
+                                        Types of wildlife attractants found. Waste/Industrial sites pose higher risks
+                                        than Vegetation.
+                                    </div>
+                                </div>
+                            </span>
+                            <span class="w-1/4 text-right flex items-center justify-end">
+                                Risk
+                                <div class="group relative ml-1">
+                                    <span class="cursor-help text-gray-500 hover:text-white">(?)</span>
+                                    <div
+                                        class="hidden group-hover:block absolute right-0 top-full mt-1 w-48 bg-gray-800 text-gray-200 text-[10px] p-2 rounded border border-gray-600 z-50">
+                                        Score (1-10) based on:
+                                        <br>1. Distance to ARP (Closer = Higher)
+                                        <br>2. Area Size (Larger = Higher)
+                                        <br>3. Type (Waste > Water > Veg)
+                                    </div>
+                                </div>
+                            </span>
+                            <span class="w-1/4 text-right">Dist (km)</span>
+                            <span class="w-16 text-center">Action</span>
+                        </div>
+                        <div class="overflow-y-auto flex-1 p-1 space-y-1" id="feature-list">
+                            <!-- Items will be injected here -->
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
-            <div class="mt-4">
-                <div class="flex items-center space-x-2">
-                    <label for="radius-input" class="block text-sm font-medium text-gray-300">Analysis Radius (km)</label>
-                    <div class="tooltip">
-                        <span class="cursor-help text-gray-400">(i)</span>
-                        <span class="tooltip-text">
-                            This sets the size of the analysis circle. Standard is 13km.
-                            <br><br>
-                            Larger radii (e.g., 20km+) analyze a much bigger area and are more likely to hit query limits or timeouts.
-                            <br><br>
-                            <b>If your query fails, try a smaller radius.</b>
-                        </span>
-                    </div>
-                </div>
-                <input type="number" id="radius-input" class="mt-1 block w-full rounded-md bg-brand-input border-brand-secondary text-white shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm p-3 border" 
-                       value="13">
+        </div>
+    </div>
+
+    <!-- About Modal -->
+    <div id="about-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center">
+        <div
+            class="bg-brand-secondary text-brand-text p-6 rounded-lg shadow-xl w-11/12 max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-white">About Habitat-Scanner</h2>
+                <button id="close-about-btn" class="text-gray-400 hover:text-white text-3xl">&times;</button>
             </div>
-
-            <div class="mt-4">
-                <div class="flex items-center space-x-2">
-                    <label for="min-area-input" class="block text-sm font-medium text-gray-300">Minimum Hazard Area (m²)</label>
-                    <div class="tooltip">
-                        <span class="cursor-help text-gray-400">(i)</span>
-                        <span class="tooltip-text">
-                            This filters out very small features. 10,000 m² is 1 hectare.
-                            <br><br>
-                            A **larger** value (e.g., 20000) means a cleaner report and a faster, less complex query.
-                            <br><br>
-                            A **smaller** value (e.g., 0) will find every tiny feature, which may cause the query to fail from being too complex.
-                            <br><br>
-                            <b>If your query fails, try a larger minimum area.</b>
-                        </span>
-                    </div>
-                </div>
-                <input type="number" id="min-area-input" class="mt-1 block w-full rounded-md bg-brand-input border-brand-secondary text-white shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm p-3 border" 
-                       value="10000">
-            </div>
-
-            <button id="submit-btn" class="mt-6 w-full inline-flex justify-center rounded-md border border-transparent bg-brand-primary py-3 px-4 text-sm font-medium text-black shadow-sm hover:bg-brand-primary-hover focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 focus:ring-offset-brand-bg">
-                <span id="submit-btn-text">Generate Report</span>
-                <div id="submit-btn-loader" class="loader hidden"></div>
-            </button>
-
-            <div id="status-message" class="mt-4 text-sm font-medium h-auto min-h-[1rem] text-center"></div>
-
-            <div class="mt-4 grid grid-cols-2 gap-4">
-                <button id="download-kml-btn" class="w-full inline-flex justify-center rounded-md border border-brand-secondary bg-brand-secondary py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 focus:ring-offset-brand-bg disabled:bg-gray-800 disabled:text-gray-500" disabled>
-                    Download KML
-                </button>
-                <button id="download-csv-btn" class="w-full inline-flex justify-center rounded-md border border-brand-secondary bg-brand-secondary py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 focus:ring-offset-brand-bg disabled:bg-gray-800 disabled:text-gray-500" disabled>
-                    Download CSV
-                </button>
+            <div class="prose prose-invert max-w-none">
+                <p>Advanced wildlife hazard analysis tool for aviation safety.</p>
+                <p>Combines OpenStreetMap and Satellite data to identify attractants.</p>
+                <h3>New in v0.5:</h3>
+                <ul class="list-disc pl-5">
+                    <li>Risk Scoring Algorithm</li>
+                    <li>Interactive Dashboard</li>
+                    <li>Expanded Data Sources</li>
+                    <li>Performance Caching</li>
+                </ul>
             </div>
         </div>
-        
-        <div class="map-container">
-            <div id="map"></div>
-        </div>
-
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
     <script src="script.js"></script>
-
-<div id="about-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center">
-        <div class="bg-brand-secondary text-brand-text p-6 md:p-8 rounded-lg shadow-xl w-11/12 md:w-2/3 lg:w-1/2 max-w-3xl max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-2xl font-bold text-white">About the Habitat-Scanner Tool</h2>
-                <button id="close-about-btn" class="text-gray-400 hover:text-white text-3xl">&times;</button>
-            </div>
-
-            <p class="mb-4">Welcome to the **Habitat-Scanner Tool**.</p>
-            <p class="mb-4">
-                This tool empowers airport operators, wildlife managers, and safety experts to rapidly identify and map potential wildlife attractants around any aerodrome or location worldwide.
-            </p>
-            <p class="mb-4">
-                By fusing live data from **OpenStreetMap (OSM)** and **Google Earth Engine (GEE)** satellite imagery, this tool scans the selected radius for critical habitats. It generates an interactive map, a KML file, and a CSV report detailing features like water bodies, landfills, wastewater plants, and agricultural areas.
-            </p>
-            <p class="mb-6">
-                This provides a rapid, data-driven baseline for your Wildlife Hazard Management Programme (WHMP) and helps prioritize on-ground surveys.
-            </p>
-
-            <h3 class="text-xl font-bold text-white mb-3">Methodology</h3>
-            <p class="mb-4">This tool implements a two-pronged data-sourcing strategy:</p>
-            <ul class="list-disc list-inside mb-4 space-y-2">
-                <li>
-                    <strong>OpenStreetMap (OSM) Data:</strong> The tool queries the Overpass API for known, human-mapped features. This includes <code class="text-sm bg-brand-input p-1 rounded">landuse=landfill</code>, <code class="text-sm bg-brand-input p-1 rounded">amenity=slaughterhouse</code>, <code class="text-sm bg-brand-input p-1 rounded">natural=water</code>, and other tags associated with wildlife attractants.
-                </li>
-                <li>
-                    <strong>Google Earth Engine (GEE) Data:</strong> To find features not mapped by OSM, the tool analyzes ESA WorldCover satellite data. It automatically identifies and vectorizes <code class="text-sm bg-brand-input p-1 rounded">Water Bodies</code> (Class 80) and <code class="text-sm bg-brand-input p-1 rounded">Cropland</code> (Class 40).
-                </li>
-            </ul>
-            <p class="mb-6">
-                The results from both sources are combined, filtered by your "Minimum Hazard Area" setting, and presented as a single, comprehensive dataset.
-            </p>
-
-            <h3 class="text-xl font-bold text-white mb-3">Contact and Access</h3>
-            <p class="mb-2">Created by Waleed MAHROUS, Stop BIRDSTRIKE.</p>
-            <ul class="list-none space-y-2">
-                <li><a href="https://waleedmahrous.com/#contact-waleed-mahrous" target="_blank" class="text-brand-primary hover:text-brand-primary-hover">Communicate directly with the creator</a></li>
-<li><a href="https://waleedmahrous.com/book-an-appointment-for-a-wildlife-hazard-management-consultation" target="_blank" class="text-brand-primary hover:text-brand-primary-hover">Book a consultation</a></li>
-<li><a href="https://waleedmahrous.com/aviation-wildlife-hazards-management-and-risk-assessment-tool" target="_blank" class="text-brand-primary hover:text-brand-primary-hover">Try the main platform</a></li>
-            </ul>
-        </div>
-    </div>
 </body>
+
 </html>

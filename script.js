@@ -1,8 +1,20 @@
-/* SCRIPT.JS (Corrected Version with Distance Display) */
+/* SCRIPT.JS (V 0.6 - Client-Side Stats & Filtering) */
 document.addEventListener('DOMContentLoaded', () => {
-    const map = L.map('map', { preferCanvas: true }).setView([20, 0], 2);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
+    // --- MAP INITIALIZATION ---
+    const map = L.map('map', { preferCanvas: true, zoomControl: false }).setView([20, 0], 2);
 
+    // Esri World Imagery (Satellite)
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+        maxZoom: 19
+    }).addTo(map);
+
+    // Optional: Add a dark overlay to make markers pop more on bright satellite imagery?
+    // L.rectangle([[-90, -180], [90, 180]], { color: '#000', weight: 0, fillOpacity: 0.3 }).addTo(map);
+
+    L.control.zoom({ position: 'topright' }).addTo(map);
+
+    // --- DOM ELEMENTS ---
     const els = {
         icao: document.getElementById('icao-input'),
         lat: document.getElementById('lat-input'),
@@ -10,42 +22,89 @@ document.addEventListener('DOMContentLoaded', () => {
         radius: document.getElementById('radius-input'),
         minArea: document.getElementById('min-area-input'),
         submit: document.getElementById('submit-btn'),
+        loader: document.getElementById('submit-btn-loader'),
+        status: document.getElementById('status-message'),
         kml: document.getElementById('download-kml-btn'),
         csv: document.getElementById('download-csv-btn'),
-        status: document.getElementById('status-message')
+        dashboard: document.getElementById('dashboard-panel'),
+        dashboardToggle: document.getElementById('dashboard-toggle'),
+        featureList: document.getElementById('feature-list'),
+        statTotal: document.getElementById('stat-total'),
+        statHighRisk: document.getElementById('stat-high-risk'),
+        statArea: document.getElementById('stat-area'),
+        filters: document.querySelectorAll('.form-checkbox')
     };
-    
-    const API_ENDPOINT = "https://hazard-map-backend.onrender.com/generate-report";
-    let layerGroup, lastKML, lastCSV, mode = 'icao';
-    let downloadName = "Custom"; 
 
-    // Tab Logic
+    // --- STATE ---
+    const API_ENDPOINT = "https://hazard-map-backend.onrender.com/generate-report";
+    let layerGroup = L.featureGroup();
+    let allFeatures = []; // Store ALL raw features
+    let currentFeatures = []; // Store FILTERED features
+    let lastKML, lastCSV, mode = 'icao';
+    let hazardChart = null;
+    let airportInfo = null;
+    let currentRadius = 13;
+
+    // --- TABS & UI LOGIC ---
     document.getElementById('tab-icao').onclick = () => setMode('icao');
     document.getElementById('tab-coords').onclick = () => setMode('coords');
+
     function setMode(m) {
         mode = m;
+        document.getElementById('tab-icao').className = m === 'icao' ? "flex-1 py-2 bg-brand-primary text-black font-semibold" : "flex-1 py-2 bg-brand-secondary text-gray-300 hover:bg-gray-700";
+        document.getElementById('tab-coords').className = m === 'coords' ? "flex-1 py-2 bg-brand-primary text-black font-semibold" : "flex-1 py-2 bg-brand-secondary text-gray-300 hover:bg-gray-700";
         document.getElementById('panel-icao').classList.toggle('hidden', m !== 'icao');
         document.getElementById('panel-coords').classList.toggle('hidden', m === 'icao');
     }
 
-    // Helper function to calculate distance between two points (Haversine formula)
-    const calculateDistance = (lat1, lon1, lat2, lon2) => {
-        const R = 6371; // Earth radius in km
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                  Math.sin(dLon/2) * Math.sin(dLon/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return R * c;
+    // Dashboard Toggle
+    let isDashboardOpen = false;
+    els.dashboardToggle.onclick = () => {
+        isDashboardOpen = !isDashboardOpen;
+        els.dashboard.classList.toggle('translate-y-full', !isDashboardOpen);
+        els.dashboardToggle.querySelector('span').innerText = isDashboardOpen ? "CLOSE" : "DASHBOARD";
     };
 
-    // Main Logic
+    // About Modal
+    document.getElementById('about-btn').onclick = () => document.getElementById('about-modal').classList.remove('hidden');
+    document.getElementById('close-about-btn').onclick = () => document.getElementById('about-modal').classList.add('hidden');
+
+    // Start Over
+    document.getElementById('start-over-btn').onclick = () => {
+        location.reload();
+    };
+
+    // --- CHART INITIALIZATION ---
+    function initChart() {
+        const ctx = document.getElementById('hazardChart').getContext('2d');
+        hazardChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Waste', 'Water', 'Vegetation', 'Other'],
+                datasets: [{
+                    data: [0, 0, 0, 0],
+                    backgroundColor: ['#8B4513', '#3B82F6', '#10B981', '#9CA3AF'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { color: '#fff', boxWidth: 10 } }
+                }
+            }
+        });
+    }
+    initChart();
+
+    // --- MAIN LOGIC ---
     els.submit.onclick = async () => {
         els.submit.disabled = true;
-        els.status.innerHTML = "Scanning... (Wait 30-60s)";
-        els.status.className = "mt-4 text-center text-blue-400";
-        
+        els.loader.classList.remove('hidden');
+        els.status.innerText = "Scanning... (This may take 30-60s)";
+        els.status.className = "text-center text-sm mt-2 text-blue-400";
+
         try {
             const payload = {
                 radius_km: parseFloat(els.radius.value) || 13,
@@ -55,198 +114,237 @@ document.addEventListener('DOMContentLoaded', () => {
                 lat: els.lat.value,
                 lon: els.lon.value
             };
+            currentRadius = payload.radius_km;
 
-            if (mode === 'icao') {
-                downloadName = payload.icao.toUpperCase();
-            } else {
-                downloadName = `Custom_${payload.lat}_${payload.lon}`;
-            }
+            // Use local backend URL if running locally, otherwise use production
+            // For this user, we assume localhost based on previous context
+            const endpoint = "http://127.0.0.1:5000/generate-report";
 
-            const res = await fetch(API_ENDPOINT, {
+            const res = await fetch(endpoint, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            
+
             const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Server Error");
 
-            if (!res.ok) {
-                throw new Error(data.error || "Server Connection Failed");
-            }
-
+            // Success
             lastKML = data.kml_string;
             lastCSV = data.csv_string;
-            
-            // Map Drawing
-            if(layerGroup) map.removeLayer(layerGroup);
-            layerGroup = L.featureGroup();
-            
-            const featureCount = data.map_geojson.features.length;
-            console.log(`Received ${featureCount} features from backend`);
-            
-            if (featureCount === 0) {
-                alert("No hazards found matching your criteria. Try reducing the minimum area filter.");
-            }
+            allFeatures = data.map_geojson.features;
+            airportInfo = data.airport_info;
 
-            let addedFeatures = 0;
-            let skippedFeatures = 0;
+            // Initial Render (All filters active by default)
+            applyFilters();
 
-            const arpLat = data.airport_info.lat;
-            const arpLon = data.airport_info.lon;
+            // Show UI
+            document.getElementById('filters-section').classList.remove('hidden');
+            document.getElementById('downloads-section').classList.remove('hidden');
 
-            // Process each feature with better error handling
-            data.map_geojson.features.forEach((feature, index) => {
-                try {
-                    const geojsonLayer = L.geoJSON(feature, {
-                        style: f => {
-                            const t = f.properties.custom_type;
-                            let c = '#8B4513'; // Brown (Waste)
-                            if(t === 'water') c = '#3B82F6'; // Blue
-                            if(t === 'veg') c = '#10B981';   // Green
-                            return { color: c, weight: 1, fillOpacity: 0.6 };
-                        },
-                        onEachFeature: (f, l) => {
-                            let name = "Industrial/Waste";
-                            if(f.properties.custom_type === 'water') name = "Water Body";
-                            if(f.properties.custom_type === 'veg') name = "Vegetation";
-                            
-                            // Calculate distance from ARP to feature centroid
-                            const featureLayer = l.toGeoJSON();
-                            let featureLat, featureLon;
-                            
-                            // Get centroid coordinates based on geometry type
-                            if (featureLayer.geometry.type === 'Polygon') {
-                                const coords = featureLayer.geometry.coordinates[0];
-                                const sumLat = coords.reduce((sum, c) => sum + c[1], 0);
-                                const sumLon = coords.reduce((sum, c) => sum + c[0], 0);
-                                featureLat = sumLat / coords.length;
-                                featureLon = sumLon / coords.length;
-                            } else if (featureLayer.geometry.type === 'MultiPolygon') {
-                                const coords = featureLayer.geometry.coordinates[0][0];
-                                const sumLat = coords.reduce((sum, c) => sum + c[1], 0);
-                                const sumLon = coords.reduce((sum, c) => sum + c[0], 0);
-                                featureLat = sumLat / coords.length;
-                                featureLon = sumLon / coords.length;
-                            } else if (featureLayer.geometry.type === 'Point') {
-                                featureLon = featureLayer.geometry.coordinates[0];
-                                featureLat = featureLayer.geometry.coordinates[1];
-                            } else {
-                                // Default fallback
-                                featureLat = arpLat;
-                                featureLon = arpLon;
-                            }
-                            
-                            const distance = calculateDistance(arpLat, arpLon, featureLat, featureLon);
-                            
-                            l.bindPopup(`<b>${name}</b><br>Area: ${Math.round(f.properties.area_sq_m).toLocaleString()} m²<br><b>Distance from ARP:</b> ${distance.toFixed(2)} km`);
-                        }
-                    });
-                    
-                    // Only add if the layer was successfully created
-                    if (geojsonLayer.getLayers().length > 0) {
-                        geojsonLayer.addTo(layerGroup);
-                        addedFeatures++;
-                    } else {
-                        skippedFeatures++;
-                        console.warn(`Feature ${index} created no layers`);
-                    }
-                } catch (error) {
-                    skippedFeatures++;
-                    console.error(`Error adding feature ${index}:`, error);
-                }
-            });
-            
-            console.log(`Added ${addedFeatures} features to map, skipped ${skippedFeatures}`);
-            
-            // ARP & Radius
-            const center = [data.airport_info.lat, data.airport_info.lon];
-            L.marker(center).addTo(layerGroup).bindPopup(`<b>ARP: ${data.airport_info.name}</b><br>Coordinates: ${center[0].toFixed(4)}, ${center[1].toFixed(4)}`);
-            
-            // Circle with interactive: false to allow clicks to pass through
-            L.circle(center, {
-                radius: payload.radius_km * 1000, 
-                color: 'red', 
-                fill: false, 
-                weight: 2,
-                interactive: false 
-            }).addTo(layerGroup);
-            
-            layerGroup.addTo(map);
-            map.fitBounds(layerGroup.getBounds());
-            
-            // More informative success message
-            const displayMsg = addedFeatures === data.feature_count 
-                ? `Success! Found and displayed ${data.feature_count} features.`
-                : `Success! Found ${data.feature_count} features (${addedFeatures} displayed on map).`;
-            
-            els.status.innerHTML = displayMsg;
-            els.status.className = "mt-4 text-center text-green-400";
-            els.kml.disabled = false;
-            els.csv.disabled = false;
-            
+            // Open Dashboard
+            if (!isDashboardOpen) els.dashboardToggle.click();
+
+            els.status.innerText = `Found ${data.feature_count} habitats.`;
+            els.status.className = "text-center text-sm mt-2 text-green-400";
+
         } catch (e) {
             console.error(e);
-            els.status.innerHTML = "Error: " + e.message;
-            els.status.className = "mt-4 text-center text-red-500";
+            els.status.innerText = "Error: " + e.message;
+            els.status.className = "text-center text-sm mt-2 text-red-500";
         } finally {
             els.submit.disabled = false;
+            els.loader.classList.add('hidden');
         }
     };
 
+    // --- FILTERING LOGIC ---
+    function applyFilters() {
+        // 1. Get active filters
+        const activeTypes = Array.from(els.filters)
+            .filter(cb => cb.checked)
+            .map(cb => cb.dataset.filter);
+
+        // 2. Filter features
+        currentFeatures = allFeatures.filter(f => {
+            const t = f.properties.custom_type;
+            return activeTypes.includes(t) || (t === 'other' && activeTypes.includes('waste')); // Group other with waste or separate?
+        });
+
+        // 3. Update everything
+        renderMap(airportInfo, currentRadius, currentFeatures);
+        updateDashboard(currentFeatures);
+        renderFeatureList(currentFeatures);
+    }
+
+    // Attach listeners to filters
+    els.filters.forEach(cb => cb.onchange = applyFilters);
+
+
+    // --- RENDER FUNCTIONS ---
+    function renderMap(arp, radiusKm, features) {
+        if (layerGroup) map.removeLayer(layerGroup);
+        layerGroup = L.featureGroup();
+
+        // ARP Marker
+        const arpIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: `<div style="background-color:#F59E0B; width:12px; height:12px; border-radius:50%; border:2px solid white;"></div>`,
+            iconSize: [12, 12],
+            iconAnchor: [6, 6]
+        });
+        L.marker([arp.lat, arp.lon], { icon: arpIcon }).addTo(layerGroup).bindPopup(`<b>ARP: ${arp.name}</b>`);
+
+        // Radius Circle
+        L.circle([arp.lat, arp.lon], {
+            radius: radiusKm * 1000,
+            color: '#F59E0B',
+            fill: false,
+            weight: 3, // Thicker for satellite visibility
+            dashArray: '10, 10'
+        }).addTo(layerGroup);
+
+        // Features
+        features.forEach(f => {
+            const t = f.properties.custom_type;
+            const risk = f.properties.risk_score || 1;
+            const dist = f.properties.dist_km || 0;
+            const specificName = f.properties.name || (t === 'water' ? "Water Body" : t === 'veg' ? "Vegetation" : "Waste/Industrial");
+
+            let color = '#9CA3AF';
+            if (t === 'waste') color = '#8B4513';
+            if (t === 'water') color = '#3B82F6';
+            if (t === 'veg') color = '#10B981';
+
+            const layer = L.geoJSON(f, {
+                style: {
+                    color: color,
+                    weight: risk > 7 ? 4 : 2, // Thicker lines
+                    fillOpacity: 0.7 // Higher opacity
+                },
+                onEachFeature: (feature, layer) => {
+                    layer.bindPopup(`
+                        <div class="font-sans min-w-[200px]">
+                            <h3 class="font-bold text-brand-primary border-b border-gray-600 pb-1 mb-2 text-sm">${specificName}</h3>
+                            <div class="text-xs space-y-1">
+                                <p class="flex justify-between"><b>Type:</b> <span>${t.toUpperCase()}</span></p>
+                                <p class="flex justify-between"><b>Risk Score:</b> <span>${risk}/10</span></p>
+                                <p class="flex justify-between"><b>Distance to ARP:</b> <span>${dist.toFixed(2)} km</span></p>
+                                <p class="flex justify-between"><b>Area:</b> <span>${Math.round(feature.properties.area_sq_m).toLocaleString()} m²</span></p>
+                            </div>
+                        </div>
+                    `);
+                    feature.layer = layer;
+                }
+            });
+            layer.addTo(layerGroup);
+        });
+
+        layerGroup.addTo(map);
+        // Don't fit bounds on every filter change to avoid jumping, only if it's the first load?
+        // Actually, fitting bounds is nice.
+        if (features.length > 0) map.fitBounds(layerGroup.getBounds());
+    }
+
+    function updateDashboard(features) {
+        // Calculate stats client-side
+        const stats = {
+            total_area: 0,
+            by_type: { waste: 0, water: 0, veg: 0, other: 0 },
+            by_risk: { High: 0, Medium: 0, Low: 0 }
+        };
+
+        features.forEach(f => {
+            stats.total_area += f.properties.area_sq_m || 0;
+
+            const t = f.properties.custom_type || 'other';
+            if (stats.by_type[t] !== undefined) stats.by_type[t]++;
+            else stats.by_type.other++;
+
+            const rs = f.properties.risk_score || 1;
+            if (rs >= 7) stats.by_risk.High++;
+            else if (rs >= 4) stats.by_risk.Medium++;
+            else stats.by_risk.Low++;
+        });
+
+        els.statTotal.innerText = features.length;
+        els.statHighRisk.innerText = stats.by_risk.High;
+        els.statArea.innerText = (stats.total_area / 1000000).toFixed(2);
+
+        // Update Chart
+        hazardChart.data.datasets[0].data = [
+            stats.by_type.waste,
+            stats.by_type.water,
+            stats.by_type.veg,
+            stats.by_type.other
+        ];
+        hazardChart.update();
+    }
+
+    function renderFeatureList(features) {
+        els.featureList.innerHTML = '';
+
+        // Sort by Risk Score (Desc)
+        const sorted = [...features].sort((a, b) => (b.properties.risk_score || 0) - (a.properties.risk_score || 0));
+
+        sorted.forEach((f, i) => {
+            const t = f.properties.custom_type;
+            const risk = f.properties.risk_score || 1;
+            const area = f.properties.area_sq_m || 0;
+            const dist = f.properties.dist_km || 0;
+            const specificName = f.properties.name || t;
+
+            const div = document.createElement('div');
+            div.className = "feature-item flex justify-between items-center p-2 rounded hover:bg-gray-700 transition-colors text-xs border-b border-gray-800";
+
+            let riskColor = "text-green-500";
+            if (risk >= 4) riskColor = "text-yellow-500";
+            if (risk >= 7) riskColor = "text-red-500";
+
+            div.innerHTML = `
+                <div class="w-1/3 font-semibold truncate" title="${specificName}">${specificName}</div>
+                <div class="w-1/4 text-right font-bold ${riskColor}">${risk}</div>
+                <div class="w-1/4 text-right text-gray-400">${dist.toFixed(2)} km</div>
+                <div class="w-16 text-center">
+                    <button class="text-brand-primary hover:text-white px-2 py-1 rounded border border-brand-primary text-[10px] group relative">
+                        VIEW
+                        <div class="hidden group-hover:block absolute right-full top-0 mr-2 w-32 bg-gray-800 text-white text-[10px] p-2 rounded z-50 border border-gray-600">
+                            Fly to this habitat on the map.
+                        </div>
+                    </button>
+                </div>
+            `;
+
+            div.querySelector('button').onclick = () => {
+                if (f.layer) {
+                    map.flyToBounds(f.layer.getBounds(), { maxZoom: 16 });
+                    f.layer.openPopup();
+                }
+            };
+
+            els.featureList.appendChild(div);
+        });
+    }
+
+    // Downloads
     const download = (d, ext) => {
+        // Generate filename based on mode
+        let locationName = '';
+        if (mode === 'icao') {
+            locationName = els.icao.value.toUpperCase() || 'UNKNOWN';
+        } else {
+            const lat = parseFloat(els.lat.value).toFixed(2);
+            const lon = parseFloat(els.lon.value).toFixed(2);
+            locationName = `${lat}_${lon}`;
+        }
+
+        const date = new Date().toISOString().split('T')[0];
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([d]));
-        const dateStr = new Date().toISOString().split('T')[0];
-        a.download = `${dateStr}_Scanned_Hazards_${downloadName}.${ext}`;
+        a.download = `Habitat_Scan_${locationName}_${date}.${ext}`;
         a.click();
     };
-    els.csv.onclick = () => download(lastCSV, 'csv');
-    els.kml.onclick = () => download(lastKML, 'kml');
-    
-    // Modal
-    document.getElementById('about-btn').onclick = () => document.getElementById('about-modal').classList.remove('hidden');
-    document.getElementById('close-about-btn').onclick = () => document.getElementById('about-modal').classList.add('hidden');
-    
-    // Start Over functionality
-    const startOverBtn = document.querySelector('a[href*="Start Over"]') || 
-                         document.getElementById('start-over-btn') ||
-                         Array.from(document.querySelectorAll('a')).find(a => a.textContent.includes('Start Over'));
-    
-    if (startOverBtn) {
-        startOverBtn.onclick = (e) => {
-            e.preventDefault();
-            
-            // Clear all inputs
-            els.icao.value = '';
-            els.lat.value = '';
-            els.lon.value = '';
-            els.radius.value = '13';
-            els.minArea.value = '10000';
-            
-            // Clear map layers
-            if (layerGroup) {
-                map.removeLayer(layerGroup);
-                layerGroup = null;
-            }
-            
-            // Reset map view
-            map.setView([20, 0], 2);
-            
-            // Clear status message
-            els.status.innerHTML = '';
-            els.status.className = 'mt-4 text-center';
-            
-            // Disable download buttons
-            els.kml.disabled = true;
-            els.csv.disabled = true;
-            
-            // Clear stored data
-            lastKML = null;
-            lastCSV = null;
-            downloadName = "Custom";
-            
-            // Switch to ICAO tab
-            setMode('icao');
-        };
-    }
+    els.csv.onclick = () => lastCSV && download(lastCSV, 'csv');
+    els.kml.onclick = () => lastKML && download(lastKML, 'kml');
+
 });
