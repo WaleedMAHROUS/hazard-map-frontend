@@ -116,11 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             currentRadius = payload.radius_km;
 
-            // Use local backend URL if running locally, otherwise use production
-            // For this user, we assume localhost based on previous context
-            const endpoint = "http://127.0.0.1:5000/generate-report";
-
-            const res = await fetch(endpoint, {
+            const res = await fetch(API_ENDPOINT, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
