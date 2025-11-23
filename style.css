@@ -6,15 +6,10 @@
 /* Define your brand colors */
 :root {
     --brand-bg: #111827;
-    /* Dark gray/black */
     --brand-text: #F3F4F6;
-    /* Light gray */
     --brand-primary: #F59E0B;
-    /* Amber/Yellowish-Orange */
     --brand-primary-hover: #D97706;
-    /* Darker Amber */
     --brand-secondary: #374151;
-    /* Mid Gray */
     --brand-input: #1F2937;
 }
 
@@ -107,71 +102,71 @@ body {
 /* Feature List Item Hover */
 .feature-item:hover {
     background-color: rgba(245, 158, 11, 0.1);
-    /* brand-primary with opacity */
     cursor: pointer;
 }
 
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
 
-    /* Hide left panel on mobile by default - slides in from left when needed */
+    /* Left panel visible on mobile but scrollable */
     .control-panel {
-        transform: translateX(-100%);
-        z-index: 30;
+        position: relative !important;
+        width: 100% !important;
+        min-width: unset !important;
+        height: auto !important;
+        max-height: 50vh;
+        overflow-y: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--brand-secondary);
     }
 
-    /* Show left panel when active */
-    .control-panel.active {
-        transform: translateX(0);
-    }
-
-    /* Make dashboard smaller and more compact on mobile */
+    /* Make dashboard smaller on mobile */
     #dashboard-panel {
-        height: 50vh !important;
-        max-height: 500px;
+        height: 40vh !important;
+        max-height: 400px;
     }
 
-    /* Stack dashboard content vertically on mobile */
+    /* Stack dashboard content vertically */
     #dashboard-panel>div>div {
         flex-direction: column !important;
-        space-x: 0 !important;
     }
 
-    /* Make dashboard sections full width on mobile */
+    /* Full width dashboard sections */
     #dashboard-panel .w-1/4 {
         width: 100% !important;
         min-width: unset !important;
         margin-bottom: 0.5rem;
     }
 
-    /* Reduce text sizes on mobile */
+    /* Smaller text on mobile */
     #dashboard-panel .text-2xl {
         font-size: 1.25rem !important;
     }
 
-    /* Make feature list more compact */
+    /* Compact feature list */
     .feature-item {
         font-size: 0.65rem !important;
         padding: 0.25rem !important;
     }
 
-    /* Smaller chart on mobile */
+    /* Smaller chart */
     #hazardChart {
         max-height: 150px;
     }
 
-    /* Ensure map is fully visible behind panels */
+    /* Map takes remaining space */
     #map {
-        position: absolute !important;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 0;
+        flex: 1;
+        min-height: 300px;
+    }
+
+    /* Stack layout vertically on mobile */
+    body>div:nth-child(2) {
+        flex-direction: column !important;
     }
 }
 
-/* Desktop: map respects layout */
+/* Desktop: normal layout */
 @media (min-width: 769px) {
     #map {
         position: relative;
